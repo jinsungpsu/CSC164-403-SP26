@@ -1,0 +1,70 @@
+  Great question — this is a classic JavaFX ObservableList pitfall, and your instincts are actually very close.
+Short answer first, then the why and how to fix it.
+
+The core problem
+Your ListView is not observing the list you are modifying.
+You do this in initialize():
+JavaobservableItems = FXCollections.observableArrayList(TodoListApp.todoListItems);todoListView.setItems(observableItems);Show more lines
+But in addButtonHandler() you do this:
+JavaTodoListApp.todoListItems.add(itemToAdd);Show more lines
+These are two different lists.
+So when you add to TodoListApp.todoListItems, the ListView never gets notified.
+Calling todoListView.refresh() does not fix this, because refresh() only redraws existing items — it does not magically sync different data sources.
+
+Why this happens (important concept)
+This line:
+JavaFXCollections.observableArrayList(TodoListApp.todoListItems);Show more lines
+✅ creates a new ObservableList
+❌ it does NOT stay linked to the original list
+Think of it as a snapshot copy, not a live view.
+After this point:
+
+observableItems → used by the ListView
+TodoListApp.todoListItems → used by your backend
+
+Changes to one do not affect the other.
+
+✅ Correct solution (best practice)
+Option 1 — Make your backend list observable (recommended)
+Instead of this:
+Javapublic static ArrayList<String> todoListItems = new ArrayList<>();Show more lines
+Do this:
+Javapublic static ObservableList<String> todoListItems =        FXCollections.observableArrayList();Show more lines
+Then in your controller:
+Java@FXMLpublic void initialize() {    todoListView.setItems(TodoListApp.todoListItems);}Show more lines
+And keep your add handler as-is:
+JavaTodoListApp.todoListItems.add(itemToAdd);Show more lines
+✅ The ListView updates automatically
+✅ No refresh() needed
+✅ One true source of data
+
+✅ Option 2 — Always modify the observable list
+Keep your backend list as-is, but update the observable list:
+Java@FXMLvoid addButtonHandler(ActionEvent event) {    String itemToAdd = newToDoItemTextArea.getText();    if (itemToAdd.isBlank()) return;    observableItems.add(itemToAdd);    newToDoItemTextArea.clear();}Show more lines
+⚠️ Downside: your backend list and UI list can get out of sync unless you’re careful
+
+✅ Fix for delete button (important!)
+Right now:
+JavatodoListView.getItems().remove(selectedItem);Show more lines
+This is fine, but if you adopt Option 1, this automatically updates the backend too.
+
+❌ Why refresh() is the wrong fix
+JavatodoListView.refresh();Show more lines
+refresh() is only useful when:
+
+You changed properties inside objects already in the list, or
+You changed a custom cell rendering
+
+It does not detect new or removed items in a non-observed list.
+
+✅ Key JavaFX rule to remember (teach this!)
+
+The ListView must observe the same ObservableList that you modify.
+
+If you remember only one sentence from this:
+
+Never update a list that the UI is not observing.
+
+
+✅ Clean, corrected controller (recommended version)
+Java@FXMLpublic void initialize() {    todoListView.setItems(TodoListApp.todoListItems);}@FXMLvoid addButtonHandler(ActionEvent event) {    String item = newToDoItemTextArea.getText();    if (!item.isBlank()) {        TodoListApp.todoListItems.add(item);        newToDoItemTextArea.clear();    }}
